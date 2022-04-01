@@ -1,160 +1,125 @@
-#pragma comment (linker,"/STACK:50000000")
+//#pragma comment (linker,"/STACK:5000000000")
+#include <ctype.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
+#include <stdio.h>
 
-typedef struct Stack {
-    char c;
-    struct Stack *Next;
-
-}Stack ;
-int s_top = 0;
-float stack[510000];
-float pop() {
-    if (s_top > 0) {
-        return stack[--s_top];
-    } else {
-        return 0;
-    }
-};
-void push(float a) {
-    stack[s_top++] = a;
-};
-Stack* out_stack_c(Stack *top, char *s ) {
-    Stack *tmp = top;
-    *s = top -> c;
-    top = top->Next;
-    free(tmp);
-    return top;
-
-}
-Stack* input_stack_c(Stack *top, char s) {
-    Stack *tmp = (Stack*) malloc(sizeof(Stack));
-    tmp -> c = s;
-    tmp-> Next = top;
-    return tmp;
-}
-int Prior ( char a ) {
-    switch ( a ) {
-        case '*': case '/': return 3;
-        case '-': case '+': return 2;
-        case '(': return 1;
-    }
-    return 0;
-}
-
-int main ()
+char text[5100000];                               //весь текст лежит здесь
+int pos=0;                                      //текущая позиция в тексте
+char* substr(char *str, int start, int length )
 {
-    //freopen("input.txt", "r", stdin);
-    //freopen("output.txt", "w", stdout);
-    Stack *t, *Top = NULL;
-    char a, in_str[510000], out_str[510000];
-    int k = 0, l = 0;
-    gets(in_str);
-    if(in_str[0] == '-')
+    char *s;
+
+    int len = 0;
+    for (int i = 0; str[i] != '\0'; i++)
+        len++;
+
+    if (length > 0)
     {
-        for (int j = strlen(in_str); j >= 0; j--) {
-            in_str[j] = in_str[j - 1];
-        }
-        in_str[0]='0';
+        if (start + length < len)
+            len = start + length;
     }
-    for (int i = 1; i <=strlen(in_str); i++)
-        if (in_str[i - 1] == '(' && (in_str[i] == '-' || in_str[i] == '+')) {
-            for (int j = strlen(in_str); j >= i; j--) {
-                in_str[j] = in_str[j - 1];
-            }
-            in_str[i]='0';
+    else
+        len = len + length;
+    int newlen = len - start + 1;
+    s = calloc(newlen,sizeof(char));
+
+    int j = 0;
+    for (int i = start; i<len; i++)
+    {
+        s[j] = str[i]; j++;
+    }
+    s[j] = '\0';
+    return(s);
+}
+char token[1];                              //текущий токен
+char *readToken() {
+    while (text[pos] ==' '||text[pos] == '\n'||text[pos] =='\t'){                   //пропускаем пробельные символы ' ', '\n', '\t', и т.п.
+        pos++;                                    //(см. функцию isspace из стандартной библиотеки)
+    }
+    if (text[pos] == 0) {
+        token[0] = 0;//если символ нулевой, то это конец текста
+        return token;                        //возвращаем токен [eof]
+    }
+    if (text[pos] =='+' || text[pos] =='-'|| text[pos] =='*'|| text[pos] =='/'|| text[pos] =='('|| text[pos] ==')')
+    {
+        token[0]=text[pos++];//это простой односимвольный токен
+        return token;               //копируем его в буфер token и возвращаем
+    }
+    int left = pos;                             //остался один случай: целое число
+    while ( isdigit(text[pos]))                   //токен продолжается, пока идут цифры
+        pos++;
+    char* s = substr(text,left,pos);
+    strcpy(token,s);
+    //(см. функцию isdigit из станд. библ.)
+    return token;              //копируем отрезок в буфер token и возвращаем
+}
+char* peekToken(){
+    int oldPos = pos;
+    readToken();
+    pos = oldPos;
+    return token;
+}
+long double ParseAtom();
+long double ParseMonome();
+long double ParseExpr() {
+    long double res;
+    if(*peekToken()=='-')
+    {
+        readToken();
+        res=ParseAtom();
+        res=-res;
+        return res;
+    }
+    res = ParseMonome();
+    char oper;//в любом случае выражение начинается с монома
+    while (*peekToken()== '+' || *peekToken()== '-') {           //выражение продолжается, пока после монома идёт плюс или минус
+        oper = *readToken();                       //читаем и запоминаем знак операции (плюс или минус)
+        long double add = ParseMonome();
+        if (oper == '+') {
+            res = res + add;
+        } else {
+            res = res - add;
         }
-    while (in_str[k] != '\0') {
-        if (in_str[k] == ')' ) {
-            while ((Top -> c) != '(' ) {
-                Top = out_stack_c(Top, &a);
-                if ( !Top ) a = '\0';
-                out_str[l++] = a;
-                out_str[l++] = ' ';
-            }
-            t = Top;
-            Top = Top -> Next;
-            free(t);
-        }
-        if (in_str[k] >= '0' && in_str[k] <= '9' )
+    }//разбираем идущий далее моном, запоминаем его значение
+    //выполняем над res и add операцию oper, запоминаем в res
+    return res;                                 //когда выражение закончится, в res будет его значение
+}
+
+long double ParseMonome() {
+    long double res;
+    res = ParseAtom();
+    char op;
+
+    while(*peekToken()=='*' || *peekToken()=='/'){
+        op = *readToken();
+        long double add = ParseAtom();
+        if(op=='*')
         {
-            while(in_str[k] >= '0' && in_str[k] <= '9' )
-            {
-                out_str[l++]=in_str[k];
-                if(in_str[k + 1] >= '0' && in_str[k + 1] <= '9')
-                {}
-                else {
-                    out_str[l++] = ' ';
-                }
-                k++;
-            }
-            continue;
+            res = res*add;
+        }else{
+            res= res/add;
         }
-        if (in_str[k] == '(' ) Top = input_stack_c(Top, in_str[k]);
-        if (in_str[k] == '+' || in_str[k] == '-' || in_str[k] == '*' || in_str[k] == '/' ) {
-            while (Top != NULL && Prior (Top -> c) >= Prior (in_str[k]) ) {
-                Top = out_stack_c(Top, &a);
-                out_str[l++] = a;
-                out_str[l++] = ' ';
-            }
-            Top = input_stack_c(Top, in_str[k]);
-        }
-        k++;
     }
-    while (Top != NULL) {
-        Top = out_stack_c(Top, &a);
-        out_str[l++] = a;
-        out_str[l++] = ' ';
-    }
-    out_str[l] = 0;
-    int i=0;
-    while (out_str[i] != 0) {
-        char c = out_str[i];
-        float x;
-        switch (c) {
-            case ' ' : break;
-            case '+' :{
-                float a=pop();
-                float b=pop();
-                push(b+a);
-                break;}
-            case '-' :{
-                float a=pop();
-                float b=pop();
-                push(b-a);
-                break;}
-            case '*' : {
-                float a=pop();
-                float b=pop();
-                push(b*a);
-                break;}
-            case '/': {
-                float a=pop();
-                float b=pop();
-                push(b/a);
-                break;}
-            default: {
-                sscanf(out_str + i, "%f", &x);
-                if(x>=10){
-                    float tmp=x;
-                    int tmp_i=0;
-                    while(tmp>=10)
-                    {
-                        tmp/=10;
-                        tmp_i++;
-                    }
-                    i+=tmp_i;
-                    push(x);
-                } else{
-                push(x);
-                }
-                break;
-            }
-        }
-        i++;
-    }
-    printf("%s\n", out_str);
-    printf("%.20f",pop());
+    return res;
+}
+
+long double ParseAtom() {
+    if (*peekToken() == '(') {                     //вариант 1: это выражение в скобках
+        readToken();                              //не забываем прочитать скобку!
+        long double res = ParseExpr();                 //рекурсивно разбираем выражение
+        readToken();                              //не забываем прочитать скобку!
+        return res;
+    } else
+        return atof(readToken());                 //вариант 2: это целое число
+}
+int main()
+{
+    freopen("input.txt","r",stdin);
+    freopen("output.txt","w",stdout);
+    gets(text);
+    long double res = ParseExpr();
+    printf("%.20Lf\n",res);
+
     return 0;
 }
